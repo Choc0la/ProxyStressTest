@@ -1,7 +1,6 @@
 # ProxyStressTest
 	MC集群代理压测+Forge注册
 
-	群号：526876433，欢迎dalao加入。
 
 	由C#编写
 	1.无需其他支持库
