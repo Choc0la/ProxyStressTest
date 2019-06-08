@@ -64,7 +64,6 @@ namespace MinecraftBots
         public static string chatlist = "chatlist.txt";
         public static bool wlogs = true;
         internal static string tok= "0000000000000000";
-        internal static string post_url = "http://illyasviel.cc/application/pst/";
 
         public static string proxy_url { get; private set; }
 

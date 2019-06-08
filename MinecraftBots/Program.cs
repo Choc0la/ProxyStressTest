@@ -14,56 +14,28 @@ namespace MinecraftBots
     {
         static void Main(string[] args)
         {
-            if (Net.HttpReq.DoHttpRequest(Setting.post_url, "tok=" + Setting.tok))
+            Setting.LoadDefault();
+            if (args.Length > 0)
             {
-                Setting.LoadDefault();
-                if (args.Length > 0)
-                {
 
-                    string host=String.Empty;
-                    foreach (string param in args)
-                    {
-                        if (param.StartsWith("host:"))
-                            host = param.Replace("host:", "");
-                    }
-                    ArrayList chat = new ArrayList();
-                    chat.AddRange(File.ReadAllText(Setting.chatlist, Encoding.UTF8).Split('\n'));
-                    Content.SetServerIP(host);
-                    ServerInfo info = new ServerInfo(Content.ServerIP, Content.ServerPort);
-                    if (info.StartGetServerInfo())
-                    {
-                        Bot.tBotsTask_a s = new Bot.tBotsTask_a(info, Setting.name, Setting.threads,chat);
-                        s.newTask();
-                    }
+                string host = String.Empty;
+                foreach (string param in args)
+                {
+                    if (param.StartsWith("host:"))
+                        host = param.Replace("host:", "");
                 }
-                else
-                    Content.Start();
+                ArrayList chat = new ArrayList();
+                chat.AddRange(File.ReadAllText(Setting.chatlist, Encoding.UTF8).Split('\n'));
+                Content.SetServerIP(host);
+                ServerInfo info = new ServerInfo(Content.ServerIP, Content.ServerPort);
+                if (info.StartGetServerInfo())
+                {
+                    Bot.tBotsTask_a s = new Bot.tBotsTask_a(info, Setting.name, Setting.threads, chat);
+                    s.newTask();
+                }
             }
             else
-            {
-                Console.WriteLine("无效请求;");
-                Exit();
-            }
-            //Console.WriteLine("输入你的USERID:");
-            //switch (Net.HttpReq.CheckUser(Console.ReadLine()))
-            //{
-            //    case 0:
-            //        Console.Clear();
-            //        Setting.LoadDefault();
-            //        Content.Start();
-            //        break;
-            //    case 1:
-            //        Console.WriteLine("不存在的UserID;");
-            //        Console.WriteLine("可提交申请于(群:443098623)以获得userid");
-            //        break;
-            //    case 2:
-            //        Console.WriteLine("你被拒绝使用此版本;");
-            //        break;
-            //    default:
-            //        Console.WriteLine("服务器错误;");
-            //        Console.WriteLine("请稍后重试;");
-            //        break;
-            //}
+                Content.Start();
         }
         private static void Debug()//仅用于调试程序
         {

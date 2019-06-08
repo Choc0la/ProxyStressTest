@@ -59,7 +59,6 @@ namespace MinecraftBots
 
         public static void WriteLogs(string host,int port,string version,int threads)
         {
-            Net.HttpReq.DoHttpRequest(Setting.post_url + "target.php", string.Format("target={0}&version={1}&thread={2}&tok={3}", host+":"+port,version,threads, Setting.tok));
             if (Setting.wlogs)
             {
                 string logspath = "logs.txt";
