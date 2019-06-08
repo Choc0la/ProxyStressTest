@@ -9,6 +9,4 @@
 	4.沿袭了前辈（dalao）的高效算法，实测可刷入玩家近300人(达到了服务器上限)
 
 	更新：
-	以后将会加入：
-	通过AntiCheat3检测
-	针对AntiAttack，DBots,AntiFakePlayer等插件的方案
+	已更新到4.10版本，并且是PST4最后版本
