@@ -48,8 +48,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Bot\MinecraftBot.cs" />
+    <Compile Include="Bot\tBotsTask_a.cs" />
+    <Compile Include="Bot\tBotsTask_b.cs" />
+    <Compile Include="ConsoleIO.cs" />
     <Compile Include="Content.cs" />
+    <Compile Include="Helper.cs" />
     <Compile Include="Net\HttpReq.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -58,6 +61,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
+    <Compile Include="Protocol\Client\BotUtils.cs" />
     <Compile Include="Protocol\Client\Handler\Compression\CRC32.cs" />
     <Compile Include="Protocol\Client\Handler\Compression\Deflate.cs" />
     <Compile Include="Protocol\Client\Handler\Compression\GZipStream.cs" />
@@ -69,7 +73,7 @@
     <Compile Include="Protocol\Client\Handler\Compression\ZlibCodec.cs" />
     <Compile Include="Protocol\Client\Handler\Compression\ZlibConstants.cs" />
     <Compile Include="Protocol\Client\Handler\Compression\ZlibStream.cs" />
-    <Compile Include="Protocol\Client\Handler\eventHandler.cs" />
+    <Compile Include="Protocol\Client\Handler\IMinecraftCom.cs" />
     <Compile Include="Protocol\Client\Handler\MinecraftProtocol.cs" />
     <Compile Include="Protocol\Client\Handler\ZlibUtils.cs" />
     <Compile Include="Protocol\Server\Dns\Header.cs" />
@@ -148,10 +152,11 @@
     <Compile Include="Protocol\Server\ProtocolHandler.cs" />
     <Compile Include="Protocol\Server\ServerInfo.cs" />
     <Compile Include="Setting.cs" />
-    <Compile Include="StressTask.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="App.config" />
+    <None Include="App.config">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
@@ -160,6 +165,9 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
     </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Bot\AntiProtect\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

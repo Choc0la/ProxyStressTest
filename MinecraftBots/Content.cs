@@ -9,53 +9,107 @@ namespace MinecraftBots
 {
     class Content
     {
-        static string ServerIP;
-        static int ServerPort;
-        static int ProtocolVersion;
+        public static string ServerIP;
+        public static int ServerPort;
+
+        public static void Start()
+        {
+            Console.WriteLine("欢迎使用ProxyStressTest-INSIDE项目ver.4.10. By:Lialy");
+            Console.WriteLine("软件已开源;照成影响作者及开发成员不承担任何责任.");
+            Console.WriteLine("项目地址(DEV)：https://github.com/MLinksme/ProxyStressTest");
+            Console.WriteLine("群号：443098623");
+            Console.WriteLine("////////////////////////////////////////////////////");
+            Console.WriteLine("正在初始化你的配置.");
+            ConsoleIO.StartPrintMsg();
+            Init();
+        }
         public static void Init()
         {
-            try {
-                Console.WriteLine("欢迎使用ProxyStressTest项目. By:Lialy");
-                Console.WriteLine("群号：526876433");
-                Console.WriteLine("////////////////////////////////////////////////////");
-                Console.WriteLine("正在初始化你的配置.");
+            try
+            {
                 SetServerIP();
-                Console.Write("服务器协议号:(0为自动获取)");
-                ProtocolVersion = int.Parse(Console.ReadLine());
                 Console.WriteLine("测试方案:");
-                Console.WriteLine("1:(代理)集群机器人测试.");
+                Console.WriteLine("1:(代理)Proxy-Bots 并发测试.");
+                Console.WriteLine("2:(代理)Proxy-Bots 队列算法测试.(不支持Motd)");
                 int Method = int.Parse(Console.ReadLine());
                 ArrayList chat = new ArrayList();
-                switch (Method)
+                ServerInfo info = new ServerInfo(ServerIP, ServerPort);
+                if (info.StartGetServerInfo())
                 {
-                    case 1:
-                        chat.AddRange(File.ReadAllText(Setting.chatlist, Encoding.UTF8).Split('\n'));
-                        StressTask s;
-                        if (ProtocolVersion == 0)
-                        {
-                            s = new StressTask(ServerIP, ServerPort, Setting.name, Setting.threads, chat);
-                        }
-                        else
-                        {
-                            s = new StressTask(ServerIP, ServerPort, Setting.name, Setting.threads, chat, ProtocolVersion);
-                        }
-                        s.PrintServerInfo();
-                        s.newTask(Setting.cooldown);
-                        break;
-                    case 2:
-                        break;
-                    default:
-                        break;
+                    int protocol = info.ProtocolVersion;
+                    PrintServerInfo(info, ref protocol);
+                    Helper.WriteLogs(info.ServerIP, info.ServerPort, info.GameVersion, Setting.threads);
+                    switch (Method)
+                    {
+                        case 1:
+                            chat.AddRange(File.ReadAllText(Setting.chatlist, Encoding.UTF8).Split('\n'));
+                            Bot.tBotsTask_a s_a;
+                            if (Setting.protocol == 0)
+                            {
+                                s_a = new Bot.tBotsTask_a(info, Setting.name, Setting.threads, chat,protocol);
+                            }
+                            else
+                            {
+                                s_a = new Bot.tBotsTask_a(info, Setting.name, Setting.threads, chat, Setting.protocol);
+                            }
+                            s_a.newTask(Setting.cooldown);
+                            break;
+                        case 2:
+                            chat.AddRange(File.ReadAllText(Setting.chatlist, Encoding.UTF8).Split('\n'));
+                            Bot.tBotsTask_b s_b;
+                            if (Setting.protocol == 0)
+                            {
+                                s_b = new Bot.tBotsTask_b(info, Setting.name, Setting.threads, chat, protocol);
+                            }
+                            else
+                            {
+                                s_b = new Bot.tBotsTask_b(info, Setting.name, Setting.threads, chat, Setting.protocol);
+                            }
+                            s_b.newTask(Setting.cooldown);
+                            break;
+                        default:
+                            Console.WriteLine("未提供相应方案，请重新选择");
+                            Init();
+                            break;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("取服务器信息失败，请重试..");
+                    Program.Exit();
                 }
             }catch(Exception e)
             {
-                Console.WriteLine("Error"+e.Message);
+                Console.WriteLine(e.Message);
             }
         }
-        public static bool SetServerIP()
+        internal static void PrintServerInfo(ServerInfo Info,ref int protocol)
         {
-            Console.Write("服务器IP地址:");
-            string server= Console.ReadLine();
+            ConsoleIO.AddMsgSeq("连接到:" + Info.ServerIP + ":" + Info.ServerPort, "INFO");
+            ConsoleIO.AddMsgSeq("/////////////////////////////////////");
+            ConsoleIO.AddMsgSeq("服务器MOTD:" + Info.MOTD);
+            ConsoleIO.AddMsgSeq("已确定版本:" + Info.GameVersion + " Protocol:" + Info.ProtocolVersion, "INFO");
+            ConsoleIO.AddMsgSeq("在线人数:" + Info.CurrentPlayerCount + "/" + Info.MaxPlayerCount, "INFO");
+            string gamever = ProtocolHandler.getGameVersion(protocol);
+            if (gamever == "")
+            {
+                ConsoleIO.AddMsgSeq("Unknown Version.", "INFO");
+                ConsoleIO.AddMsgSeq("无法确定版本，请手动输入(1.7-1.13.1)");
+                protocol = ProtocolHandler.MCVer2ProtocolVersion(Console.ReadLine());
+            }
+            else
+                ConsoleIO.AddMsgSeq("运行版本:" + gamever, "INFO");
+            Console.WriteLine("正在创建线程...");
+        }
+        public static bool SetServerIP(string init=null)
+        {
+            string server = String.Empty;
+            if (init == null)
+            {
+                Console.Write("服务器IP地址:");
+                server = Console.ReadLine();
+            }
+            else server = init;
             server = server.ToLower();
             string[] sip = server.Split(':');
             string host = sip[0];
@@ -97,5 +151,7 @@ namespace MinecraftBots
             }
             return false;
         }
+
+
     }
 }

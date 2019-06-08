@@ -28,6 +28,16 @@ namespace MinecraftBots.Protocol.Client.Handler
         private const int MC17w13aVersion = 318;
         private const int MC112pre5Version = 332;
         private const int MC17w31aVersion = 336;
+        private const int MC17w45aVersion = 343;
+        private const int MC17w46aVersion = 345;
+        private const int MC17w47aVersion = 346;
+        private const int MC18w01aVersion = 352;
+        private const int MC18w06aVersion = 357;
+        private const int MC113pre4Version = 386;
+        private const int MC113pre7Version = 389;
+        private const int MC113Version = 393;
+
+        private int autocomplete_transaction_id = 0;
 
         Thread netRead;
         public MinecraftProtocol(TcpClient tcp, int protocolver,MinecraftEvent Handler,ForgeInfo forge)
@@ -42,42 +52,12 @@ namespace MinecraftBots.Protocol.Client.Handler
             int read = 0;
             while (read < offset)
             {
-                read += client.Client.Receive(buffer, start + read, offset - read, f);
-            }
-        }
-        private void SendPacket(PacketOutgoingType packetID, IEnumerable<byte> packetData)
-        {
-            SendPacket(getPacketOutgoingID(packetID, protocolversion), packetData);
-        }
-        private void SendPacket(int packetID, IEnumerable<byte> packetData)
-        {
-            byte[] the_packet = concatBytes(getVarInt(packetID), packetData.ToArray());
-            if (compression_treshold > 0) //Compression enabled?
-            {
-                if (the_packet.Length >= compression_treshold) //Packet long enough for compressing?
-                {
-                    byte[] compressed_packet = ZlibUtils.Compress(the_packet);
-                    the_packet = concatBytes(getVarInt(the_packet.Length), compressed_packet);
-                }
+                int len = client.Client.Receive(buffer, start + read, offset - read, f);
+                if (len != 0)
+                    read += len;
                 else
-                {
-                    byte[] uncompressed_length = getVarInt(0); //Not compressed (short packet)
-                    the_packet = concatBytes(uncompressed_length, the_packet);
-                }
+                    handler.OnConnectionLost(BotUtils.DisconnectReason.ConnectionLost, "Connection Close.");
             }
-            try
-            {
-                client.Client.Send(concatBytes(getVarInt(the_packet.Length), the_packet));
-            }
-            catch
-            {
-                handler.OnConnectionLost(0, "PacketSendError.");
-            }
-            
-        }
-        private void SendForgeHandshakePacket(FMLHandshakeDiscriminator discriminator, byte[] data)
-        {
-            SendPluginChannelPacket("FML|HS", concatBytes(new byte[] { (byte)discriminator }, data));
         }
         private bool CompleteForgeHandshake()
         {
@@ -90,7 +70,7 @@ namespace MinecraftBots.Protocol.Client.Handler
 
                 if (packetID == 0x40) // Disconnect
                 {
-                    Console.WriteLine("[FML] Connection Lost.");
+                    ConsoleIO.AddMsgSeq("[FML] Connection Lost.");
                     return false;
                 }
                 else
@@ -120,6 +100,7 @@ namespace MinecraftBots.Protocol.Client.Handler
             {
                 case PacketIncomingType.KeepAlive:
                     SendPacket(PacketOutgoingType.KeepAlive, packetData);
+                    handler.OnKeepAlive();
                     break;
                 case PacketIncomingType.JoinGame:
                     handler.OnGameJoin();
@@ -136,8 +117,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                         readNextBool(packetData);  // Reduced debug info - 1.8 and above
                     break;
                 case PacketIncomingType.ChatMessage:
-                    string message = readNextString(packetData);
-                    handler.OnTextReceived(message);
+                    //string message = readNextString(packetData);
                     break;
                 case PacketIncomingType.Respawn:
                     this.currentDimension = readNextInt(packetData);
@@ -152,6 +132,36 @@ namespace MinecraftBots.Protocol.Client.Handler
                         // Teleport confirm packet
                         SendPacket(PacketOutgoingType.TeleportConfirm, getVarInt(teleportID));
                     }
+                    break;
+                case PacketIncomingType.ChunkData:
+                    break;
+                case PacketIncomingType.MultiBlockChange:
+                    break;
+                case PacketIncomingType.BlockChange:
+                    break;
+                case PacketIncomingType.TabCompleteResult:
+                    if (protocolversion >= MC17w46aVersion)
+                    {
+                        autocomplete_transaction_id = readNextVarInt(packetData);
+                    }
+                    if (protocolversion >= MC17w47aVersion)
+                    {
+                        // Start of the text to replace - currently unused
+                        readNextVarInt(packetData);
+                    }
+
+                    if (protocolversion >= MC18w06aVersion)
+                    {
+                        // Length of the text to replace - currently unused
+                        readNextVarInt(packetData);
+                    }
+                    int autocomplete_count = readNextVarInt(packetData);
+                    break;
+                case PacketIncomingType.MapChunkBulk:
+                    break;
+                case PacketIncomingType.UnloadChunk:
+                    break;
+                case PacketIncomingType.PlayerListUpdate:
                     break;
                 case PacketIncomingType.PluginMessage:
                     String channel = readNextString(packetData);
@@ -283,16 +293,9 @@ namespace MinecraftBots.Protocol.Client.Handler
                         }
                     }
                     #endregion
-                    #region AntiCheat
-                    if(channel== "AntiCheat3.4.3")
-                    {
-                        Console.WriteLine("检测到AntiCheat.");
-                        string code=ZlibUtils.GZIPdecompress(packetData.ToArray());
-                    }
-                    #endregion
                     return false;
                 case PacketIncomingType.KickPacket:
-                    handler.OnConnectionLost(2,readNextString(packetData));
+                    handler.OnConnectionLost(BotUtils.DisconnectReason.InGameKick, readNextString(packetData));
                     return false;
                 case PacketIncomingType.NetworkCompressionTreshold:
                     if (protocolversion >= MC18Version && protocolversion < MC19Version)
@@ -326,27 +329,6 @@ namespace MinecraftBots.Protocol.Client.Handler
             PlayerPositionAndLook,
             TeleportConfirm
         }
-        public bool SendPluginChannelPacket(string channel, byte[] data)
-        {
-            try
-            {
-                if (protocolversion < MC18Version)
-                {
-                    byte[] length = BitConverter.GetBytes((short)data.Length);
-                    Array.Reverse(length);
-
-                    SendPacket(PacketOutgoingType.PluginMessage, concatBytes(getString(channel), length, data));
-                }
-                else
-                {
-                    SendPacket(PacketOutgoingType.PluginMessage, concatBytes(getString(channel), data));
-                }
-
-                return true;
-            }
-            catch (SocketException) { return false; }
-            catch (System.IO.IOException) { return false; }
-        }
         private enum PacketIncomingType
         {
             KeepAlive,
@@ -369,7 +351,7 @@ namespace MinecraftBots.Protocol.Client.Handler
         }
         private PacketIncomingType getPacketIncomingType(int packetID)
         {
-            if (protocolversion < 107)
+            if (protocolversion < MC19Version)
             {
                 switch (packetID)
                 {
@@ -392,7 +374,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else if (protocolversion < 318)
+            else if (protocolversion < MC17w13aVersion)
             {
                 switch (packetID)
                 {
@@ -415,7 +397,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else if (protocolversion < 332)
+            else if (protocolversion < MC112pre5Version)
             {
                 switch (packetID)
                 {
@@ -438,7 +420,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else if (protocolversion < 336)
+            else if (protocolversion < MC17w31aVersion)
             {
                 switch (packetID)
                 {
@@ -461,7 +443,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else
+            else if (protocolversion < MC17w45aVersion)
             {
                 switch (packetID)
                 {
@@ -484,11 +466,103 @@ namespace MinecraftBots.Protocol.Client.Handler
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
+            else if (protocolversion < MC17w46aVersion)
+            {
+                switch (packetID)
+                {
+                    case 0x1F: return PacketIncomingType.KeepAlive;
+                    case 0x23: return PacketIncomingType.JoinGame;
+                    case 0x0E: return PacketIncomingType.ChatMessage;
+                    case 0x35: return PacketIncomingType.Respawn;
+                    case 0x2F: return PacketIncomingType.PlayerPositionAndLook;
+                    case 0x21: return PacketIncomingType.ChunkData;
+                    case 0x0F: return PacketIncomingType.MultiBlockChange;
+                    case 0x0B: return PacketIncomingType.BlockChange;
+                    //MapChunkBulk removed in 1.9
+                    case 0x1D: return PacketIncomingType.UnloadChunk;
+                    case 0x2E: return PacketIncomingType.PlayerListUpdate;
+                    //TabCompleteResult accidentely removed
+                    case 0x18: return PacketIncomingType.PluginMessage;
+                    case 0x1A: return PacketIncomingType.KickPacket;
+                    //NetworkCompressionTreshold removed in 1.9
+                    case 0x34: return PacketIncomingType.ResourcePackSend;
+                    default: return PacketIncomingType.UnknownPacket;
+                }
+            }
+            else if (protocolversion < MC18w01aVersion)
+            {
+                switch (packetID)
+                {
+                    case 0x20: return PacketIncomingType.KeepAlive;
+                    case 0x24: return PacketIncomingType.JoinGame;
+                    case 0x0E: return PacketIncomingType.ChatMessage;
+                    case 0x36: return PacketIncomingType.Respawn;
+                    case 0x30: return PacketIncomingType.PlayerPositionAndLook;
+                    case 0x21: return PacketIncomingType.ChunkData;
+                    case 0x0F: return PacketIncomingType.MultiBlockChange;
+                    case 0x0B: return PacketIncomingType.BlockChange;
+                    //MapChunkBulk removed in 1.9
+                    case 0x1E: return PacketIncomingType.UnloadChunk;
+                    case 0x2F: return PacketIncomingType.PlayerListUpdate;
+                    case 0x10: return PacketIncomingType.TabCompleteResult;
+                    case 0x19: return PacketIncomingType.PluginMessage;
+                    case 0x1B: return PacketIncomingType.KickPacket;
+                    //NetworkCompressionTreshold removed in 1.9
+                    case 0x35: return PacketIncomingType.ResourcePackSend;
+                    default: return PacketIncomingType.UnknownPacket;
+                }
+            }
+            else if (protocolversion < MC113pre7Version)
+            {
+                switch (packetID)
+                {
+                    case 0x20: return PacketIncomingType.KeepAlive;
+                    case 0x24: return PacketIncomingType.JoinGame;
+                    case 0x0E: return PacketIncomingType.ChatMessage;
+                    case 0x37: return PacketIncomingType.Respawn;
+                    case 0x31: return PacketIncomingType.PlayerPositionAndLook;
+                    case 0x21: return PacketIncomingType.ChunkData;
+                    case 0x0F: return PacketIncomingType.MultiBlockChange;
+                    case 0x0B: return PacketIncomingType.BlockChange;
+                    //MapChunkBulk removed in 1.9
+                    case 0x1E: return PacketIncomingType.UnloadChunk;
+                    case 0x2F: return PacketIncomingType.PlayerListUpdate;
+                    case 0x10: return PacketIncomingType.TabCompleteResult;
+                    case 0x19: return PacketIncomingType.PluginMessage;
+                    case 0x1B: return PacketIncomingType.KickPacket;
+                    //NetworkCompressionTreshold removed in 1.9
+                    case 0x36: return PacketIncomingType.ResourcePackSend;
+                    default: return PacketIncomingType.UnknownPacket;
+                }
+            }
+            else
+            {
+                switch (packetID)
+                {
+                    case 0x21: return PacketIncomingType.KeepAlive;
+                    case 0x25: return PacketIncomingType.JoinGame;
+                    case 0x0E: return PacketIncomingType.ChatMessage;
+                    case 0x38: return PacketIncomingType.Respawn;
+                    case 0x32: return PacketIncomingType.PlayerPositionAndLook;
+                    case 0x22: return PacketIncomingType.ChunkData;
+                    case 0x0F: return PacketIncomingType.MultiBlockChange;
+                    case 0x0B: return PacketIncomingType.BlockChange;
+                    //MapChunkBulk removed in 1.9
+                    case 0x1F: return PacketIncomingType.UnloadChunk;
+                    case 0x30: return PacketIncomingType.PlayerListUpdate;
+                    case 0x10: return PacketIncomingType.TabCompleteResult;
+                    case 0x19: return PacketIncomingType.PluginMessage;
+                    case 0x1B: return PacketIncomingType.KickPacket;
+                    //NetworkCompressionTreshold removed in 1.9
+                    case 0x37: return PacketIncomingType.ResourcePackSend;
+                    default: return PacketIncomingType.UnknownPacket;
+                }
+            }
         }
 
         private int getPacketOutgoingID(PacketOutgoingType packet, int protocol)
         {
-            if (protocol < 107)
+            if (protocol < MC19Version)
             {
                 switch (packet)
                 {
@@ -504,7 +578,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: throw new InvalidOperationException("Teleport confirm is not supported in protocol " + protocol);
                 }
             }
-            else if (protocol < 318)
+            else if (protocol < MC17w13aVersion)
             {
                 switch (packet)
                 {
@@ -520,7 +594,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
-            else if (protocolversion < 332)
+            else if (protocolversion < MC112pre5Version)
             {
                 switch (packet)
                 {
@@ -536,7 +610,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
-            else if (protocol < 336)
+            else if (protocol < MC17w31aVersion)
             {
                 switch (packet)
                 {
@@ -552,12 +626,12 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
-            else
+            else if (protocol < MC17w45aVersion)
             {
                 switch (packet)
                 {
                     case PacketOutgoingType.KeepAlive: return 0x0B;
-                    case PacketOutgoingType.ResourcePackStatus: return 0x17;
+                    case PacketOutgoingType.ResourcePackStatus: return 0x18;
                     case PacketOutgoingType.ChatMessage: return 0x02;
                     case PacketOutgoingType.ClientStatus: return 0x03;
                     case PacketOutgoingType.ClientSettings: return 0x04;
@@ -565,6 +639,70 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TabComplete: return 0x01;
                     case PacketOutgoingType.PlayerPosition: return 0x0D;
                     case PacketOutgoingType.PlayerPositionAndLook: return 0x0E;
+                    case PacketOutgoingType.TeleportConfirm: return 0x00;
+                }
+            }
+            else if (protocol < MC17w46aVersion)
+            {
+                switch (packet)
+                {
+                    case PacketOutgoingType.KeepAlive: return 0x0A;
+                    case PacketOutgoingType.ResourcePackStatus: return 0x17;
+                    case PacketOutgoingType.ChatMessage: return 0x01;
+                    case PacketOutgoingType.ClientStatus: return 0x02;
+                    case PacketOutgoingType.ClientSettings: return 0x03;
+                    case PacketOutgoingType.PluginMessage: return 0x08;
+                    case PacketOutgoingType.TabComplete: throw new InvalidOperationException("TabComplete was accidentely removed in protocol " + protocol + ". Please use a more recent version.");
+                    case PacketOutgoingType.PlayerPosition: return 0x0C;
+                    case PacketOutgoingType.PlayerPositionAndLook: return 0x0D;
+                    case PacketOutgoingType.TeleportConfirm: return 0x00;
+                }
+            }
+            else if (protocol < MC113pre4Version)
+            {
+                switch (packet)
+                {
+                    case PacketOutgoingType.KeepAlive: return 0x0B;
+                    case PacketOutgoingType.ResourcePackStatus: return 0x18;
+                    case PacketOutgoingType.ChatMessage: return 0x01;
+                    case PacketOutgoingType.ClientStatus: return 0x02;
+                    case PacketOutgoingType.ClientSettings: return 0x03;
+                    case PacketOutgoingType.PluginMessage: return 0x09;
+                    case PacketOutgoingType.TabComplete: return 0x04;
+                    case PacketOutgoingType.PlayerPosition: return 0x0D;
+                    case PacketOutgoingType.PlayerPositionAndLook: return 0x0E;
+                    case PacketOutgoingType.TeleportConfirm: return 0x00;
+                }
+            }
+            else if (protocol < MC113pre7Version)
+            {
+                switch (packet)
+                {
+                    case PacketOutgoingType.KeepAlive: return 0x0C;
+                    case PacketOutgoingType.ResourcePackStatus: return 0x1B;
+                    case PacketOutgoingType.ChatMessage: return 0x01;
+                    case PacketOutgoingType.ClientStatus: return 0x02;
+                    case PacketOutgoingType.ClientSettings: return 0x03;
+                    case PacketOutgoingType.PluginMessage: return 0x09;
+                    case PacketOutgoingType.TabComplete: return 0x04;
+                    case PacketOutgoingType.PlayerPosition: return 0x0E;
+                    case PacketOutgoingType.PlayerPositionAndLook: return 0x0F;
+                    case PacketOutgoingType.TeleportConfirm: return 0x00;
+                }
+            }
+            else
+            {
+                switch (packet)
+                {
+                    case PacketOutgoingType.KeepAlive: return 0x0E;
+                    case PacketOutgoingType.ResourcePackStatus: return 0x1D;
+                    case PacketOutgoingType.ChatMessage: return 0x02;
+                    case PacketOutgoingType.ClientStatus: return 0x03;
+                    case PacketOutgoingType.ClientSettings: return 0x04;
+                    case PacketOutgoingType.PluginMessage: return 0x0A;
+                    case PacketOutgoingType.TabComplete: return 0x05;
+                    case PacketOutgoingType.PlayerPosition: return 0x10;
+                    case PacketOutgoingType.PlayerPositionAndLook: return 0x11;
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
@@ -603,7 +741,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                 Receive(tmp, 0, 1, SocketFlags.None);
                 k = tmp[0];
                 i |= (k & 0x7F) << j++ * 7;
-                if (j > 5) Console.WriteLine("VarInt too big");
+                if (j > 5) ConsoleIO.AddMsgSeq("VarInt too big");
                 if ((k & 0x80) != 128) break;
             }
             return i;
@@ -662,9 +800,9 @@ namespace MinecraftBots.Protocol.Client.Handler
         }
         private byte readNextByte(List<byte> cache)
         {
-             byte result = cache[0];
-             cache.RemoveAt(0);
-             return result;
+            byte result = cache[0];
+            cache.RemoveAt(0);
+            return result;
 
         }
         public string readNextString(List<byte> cache)
@@ -678,16 +816,9 @@ namespace MinecraftBots.Protocol.Client.Handler
         }
         private byte[] readData(int offset, List<byte> cache)
         {
-            try
-            {
-                byte[] result = cache.Take(offset).ToArray();
-                cache.RemoveRange(0, offset);
-                return result;
-            }catch(Exception e)
-            {
-                Console.WriteLine("[readData] "+e.Message);
-            }
-            return new byte[0];
+            byte[] result = cache.Take(offset).ToArray();
+            cache.RemoveRange(0, offset);
+            return result;
         }
         private int readNextInt(List<byte> cache)
         {
@@ -722,22 +853,6 @@ namespace MinecraftBots.Protocol.Client.Handler
         {
             return readNextByte(cache) != 0x00;
         }
-        public bool Handshake(string host, int port)
-        {
-            try {
-                byte[] protocol_version = getVarInt(protocolversion);
-                byte[] server_adress_val = Encoding.UTF8.GetBytes(host + (forgeInfo != null ? "\0FML\0" : ""));
-                byte[] server_adress_len = getVarInt(server_adress_val.Length);
-                byte[] server_port = BitConverter.GetBytes((ushort)port); Array.Reverse(server_port);
-                byte[] next_state = getVarInt(2);
-                byte[] handshake_packet = concatBytes(protocol_version, server_adress_len, server_adress_val, server_port, next_state);
-
-                SendPacket(0x00, handshake_packet);
-                return true;
-            }
-            catch(SocketException)
-            {   return false;  }
-        }
         public bool Update()
         {
             if (client.Client == null || !client.Connected) { return false; }
@@ -769,7 +884,7 @@ namespace MinecraftBots.Protocol.Client.Handler
             catch (SocketException) { }
             catch (ObjectDisposedException) { }
 
-            handler.OnConnectionLost(0, "Connection Close.");
+            handler.OnConnectionLost(BotUtils.DisconnectReason.ConnectionLost, "Connection Close.");
         }
 
         private void StartUpdating()
@@ -780,8 +895,16 @@ namespace MinecraftBots.Protocol.Client.Handler
         }
 
 
-        public bool Login(string username)
+        public bool Login(string host, int port,string username)
         {
+            byte[] protocol_version = getVarInt(protocolversion);
+            byte[] server_adress_val = Encoding.UTF8.GetBytes(host + (forgeInfo != null ? "\0FML\0" : ""));
+            byte[] server_adress_len = getVarInt(server_adress_val.Length);
+            byte[] server_port = BitConverter.GetBytes((ushort)port); Array.Reverse(server_port);
+            byte[] next_state = getVarInt(2);
+            byte[] handshake_packet = concatBytes(protocol_version, server_adress_len, server_adress_val, server_port, next_state);
+
+            SendPacket(0x00, handshake_packet);
             byte[] username_val = Encoding.UTF8.GetBytes(username);
             byte[] username_len = getVarInt(username_val.Length);
             byte[] login_packet = concatBytes(username_len, username_val);
@@ -793,12 +916,13 @@ namespace MinecraftBots.Protocol.Client.Handler
                 readNextPacket(ref packetID, packetData);
                 if (packetID == 0x00) //Login rejected
                 {
-                    handler.OnConnectionLost(1, readNextString(packetData));
+                    handler.OnConnectionLost(BotUtils.DisconnectReason.LoginRejected, readNextString(packetData));
                     return false;
                 }
                 else if (packetID == 0x01) //Encryption request
                 {
-                    Console.WriteLine(username + "This Server is in online mode.", "Connection");
+                    ConsoleIO.AddMsgSeq(username + "This Server is in online mode.", "Connection");
+                    return false;
                 }
                 else if (packetID == 0x02) //Login successful
                 {
@@ -818,6 +942,40 @@ namespace MinecraftBots.Protocol.Client.Handler
                 else handlePacket(packetID, packetData);
             }
         }
+        private void SendPacket(PacketOutgoingType packetID, IEnumerable<byte> packetData)
+        {
+            SendPacket(getPacketOutgoingID(packetID, protocolversion), packetData);
+        }
+        private void SendPacket(int packetID, IEnumerable<byte> packetData)
+        {
+            byte[] the_packet = concatBytes(getVarInt(packetID), packetData.ToArray());
+            if (compression_treshold > 0) //Compression enabled?
+            {
+                if (the_packet.Length >= compression_treshold) //Packet long enough for compressing?
+                {
+                    byte[] compressed_packet = ZlibUtils.Compress(the_packet);
+                    the_packet = concatBytes(getVarInt(the_packet.Length), compressed_packet);
+                }
+                else
+                {
+                    byte[] uncompressed_length = getVarInt(0); //Not compressed (short packet)
+                    the_packet = concatBytes(uncompressed_length, the_packet);
+                }
+            }
+            try
+            {
+                client.Client.Send(concatBytes(getVarInt(the_packet.Length), the_packet));
+            }
+            catch
+            {
+                handler.OnConnectionLost(BotUtils.DisconnectReason.ConnectionLost, "PacketSendError.");
+            }
+
+        }
+        private void SendForgeHandshakePacket(FMLHandshakeDiscriminator discriminator, byte[] data)
+        {
+            SendPluginChannelPacket("FML|HS", concatBytes(new byte[] { (byte)discriminator }, data));
+        }
         public bool SendChatMessage(string message)
         {
             if (String.IsNullOrEmpty(message))
@@ -833,19 +991,93 @@ namespace MinecraftBots.Protocol.Client.Handler
             catch (SocketException) { return false; }
             catch (System.IO.IOException) { return false; }
         }
+        public bool SendRespawnPacket()
+        {
+            try
+            {
+                SendPacket(PacketOutgoingType.ClientStatus, new byte[] { 0 });
+                return true;
+            }
+            catch (SocketException) { return false; }
+        }
+        public bool SendClientSettings(string language, byte viewDistance, byte difficulty, byte chatMode, bool chatColors, byte skinParts, byte mainHand)
+        {
+            try
+            {
+                List<byte> fields = new List<byte>();
+                fields.AddRange(getString(language));
+                fields.Add(viewDistance);
+                fields.AddRange(protocolversion >= MC19Version
+                    ? getVarInt(chatMode)
+                    : new byte[] { chatMode });
+                fields.Add(chatColors ? (byte)1 : (byte)0);
+                if (protocolversion < MC18Version)
+                {
+                    fields.Add(difficulty);
+                    fields.Add((byte)(skinParts & 0x1)); //show cape
+                }
+                else fields.Add(skinParts);
+                if (protocolversion >= MC19Version)
+                    fields.AddRange(getVarInt(mainHand));
+                SendPacket(PacketOutgoingType.ClientSettings, fields);
+            }
+            catch (SocketException) { }
+            return false;
+        }
+        public bool SendPluginChannelPacket(string channel, byte[] data)
+        {
+            try
+            {
+                if (protocolversion < MC18Version)
+                {
+                    byte[] length = BitConverter.GetBytes((short)data.Length);
+                    Array.Reverse(length);
+
+                    SendPacket(PacketOutgoingType.PluginMessage, concatBytes(getString(channel), length, data));
+                }
+                else
+                {
+                    SendPacket(PacketOutgoingType.PluginMessage, concatBytes(getString(channel), data));
+                }
+
+                return true;
+            }
+            catch (SocketException) { return false; }
+            catch (System.IO.IOException) { return false; }
+        }
+
         public bool AutoTabComplete(string BehindCursor)
         {
             if (String.IsNullOrEmpty(BehindCursor))
                 return false;
-            byte[] tocomplete_val = Encoding.UTF8.GetBytes(BehindCursor);
-            byte[] tocomplete_len = getVarInt(tocomplete_val.Length);
+            byte[] transaction_id = getVarInt(autocomplete_transaction_id);
             byte[] assume_command = new byte[] { 0x00 };
             byte[] has_position = new byte[] { 0x00 };
-            byte[] tabcomplete_packet = protocolversion >= MC18Version
-                ? protocolversion >= MC19Version
-                    ? concatBytes(tocomplete_len, tocomplete_val, assume_command, has_position)
-                    : concatBytes(tocomplete_len, tocomplete_val, has_position)
-                : concatBytes(tocomplete_len, tocomplete_val);
+
+            byte[] tabcomplete_packet = new byte[] { };
+            if (protocolversion >= MC18Version)
+            {
+                if (protocolversion >= MC17w46aVersion)
+                {
+                    tabcomplete_packet = concatBytes(tabcomplete_packet, transaction_id);
+                    tabcomplete_packet = concatBytes(tabcomplete_packet, getString(BehindCursor));
+                }
+                else
+                {
+                    tabcomplete_packet = concatBytes(tabcomplete_packet, getString(BehindCursor));
+
+                    if (protocolversion >= MC19Version)
+                    {
+                        tabcomplete_packet = concatBytes(tabcomplete_packet, assume_command);
+                    }
+
+                    tabcomplete_packet = concatBytes(tabcomplete_packet, has_position);
+                }
+            }
+            else
+            {
+                tabcomplete_packet = concatBytes(getString(BehindCursor));
+            }
             SendPacket(PacketOutgoingType.TabComplete, tabcomplete_packet);
             return true;
         }
@@ -854,10 +1086,9 @@ namespace MinecraftBots.Protocol.Client.Handler
             try
             {
                 if (netRead != null)
-                {
                     netRead.Abort();
+                if(client!=null)
                     client.Close();
-                }
             }
             catch { }
         }

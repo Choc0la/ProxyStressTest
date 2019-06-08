@@ -13,6 +13,13 @@ namespace MinecraftBots
     {
         [DllImport("kernel32")]
         private static extern int GetPrivateProfileString(string section, string key, string def, StringBuilder retVal, int size, string filePath);
+        [DllImport("kernel32")]
+        private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
+
+        public static void IniWriteValue(string Section, string Key,string value)
+        {
+            WritePrivateProfileString(Section, Key, value, InIpath);
+        }
         private static string IniReadValue(string Section, string Key)
         {
             StringBuilder temp = new StringBuilder(500);
@@ -24,38 +31,24 @@ namespace MinecraftBots
             if (File.Exists(InIpath))
             {
                 name = IniReadValue("Control","name");
-                threads = int.Parse(IniReadValue("Control", "threads"));
+                threads = int.Parse(IniReadValue("Control", "maxbots"));
                 cooldown = int.Parse(IniReadValue("Control", "cooldown"));
                 protocol = int.Parse(IniReadValue("Control", "protocol"));
-                if(IniReadValue("Bot", "motdSend") == "true")
-                {
-                    MotdSend = true;
-                }
-                else
-                {
-                    MotdSend = false;
-                }
-                if(IniReadValue("Bot", "tabComplete") == "true")
-                {
-                    TabComplete = true;
-                }
-                else
-                {
-                    TabComplete = false;
-                }
-                if (IniReadValue("Bot", "reJoin") == "true")
-                {
-                    ReJoin = true;
-                }
-                else
-                {
-                    ReJoin = false;
-                }
+                t_clear= int.Parse(IniReadValue("Control", "tclear"));
+                proxy_url = IniReadValue("Proxy", "url");
+                proxy_cookie = IniReadValue("Proxy", "cookie");
+                proxy_regex = IniReadValue("Proxy", "regex");
+                sendmotd=strToBool(IniReadValue("Bot", "motdSend"));
+                t_tabcomplete = int.Parse(IniReadValue("Bot", "tabComplete"));
+                t_rejoin = int.Parse(IniReadValue("Bot", "reJoin"));
+                sendsetting = strToBool(IniReadValue("Bot", "ClientSettingSend"));
+                wlogs=strToBool(IniReadValue("Info", "Wlogs"));
                 chatlist = IniReadValue("Info", "chats");
             }
             else
             {
                 File.WriteAllText(InIpath, Properties.Resources.DefaultConfig);
+                LoadDefault();
             }
         }
         public static string InIpath = Environment.CurrentDirectory + "\\config.ini";
@@ -64,11 +57,27 @@ namespace MinecraftBots
         public static int threads { get; private set; }
         public static int cooldown { get; private set; }
         public static int protocol { get; private set; }
-        public static bool MotdSend { get; private set; }
-        public static bool TabComplete { get; private set; }
+        public static bool sendmotd { get; private set; }
+        public static bool sendsetting { get; private set; }
+        public static int t_clear { get; private set; }
+        public static int t_tabcomplete { get; private set; }
         public static string chatlist = "chatlist.txt";
-        internal static string tok="17273-10492";
+        public static bool wlogs = true;
+        internal static string tok= "0000000000000000";
+        internal static string post_url = "http://illyasviel.cc/application/pst/";
 
-        public static bool ReJoin { get; private set; }
+        public static string proxy_url { get; private set; }
+
+        public static string proxy_cookie { get; set; }
+        public static string proxy_regex { get; private set; }
+
+        public static int t_rejoin { get; private set; }
+        private static bool strToBool(string format)
+        {
+            if (format.Trim().ToLower() == "true")
+                return true;
+            else
+                return false;
+        }
     }
 }

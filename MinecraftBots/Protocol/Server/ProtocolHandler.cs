@@ -246,6 +246,7 @@ namespace MinecraftBots.Protocol.Server
                         return 60;
                     case "1.5.2":
                         return 61;
+                    case "1.6":
                     case "1.6.0":
                         return 72;
                     case "1.6.1":
@@ -264,6 +265,7 @@ namespace MinecraftBots.Protocol.Server
                     case "1.7.9":
                     case "1.7.10":
                         return 5;
+                    case "1.8":
                     case "1.8.0":
                     case "1.8.1":
                     case "1.8.2":
@@ -275,8 +277,38 @@ namespace MinecraftBots.Protocol.Server
                     case "1.8.8":
                     case "1.8.9":
                         return 47;
+                    case "1.9":
                     case "1.9.0":
                         return 107;
+                    case "1.9.1":
+                        return 108;
+                    case "1.9.2":
+                        return 109;
+                    case "1.9.3":
+                    case "1.9.4":
+                        return 110;
+                    case "1.10":
+                    case "1.10.0":
+                    case "1.10.1":
+                    case "1.10.2":
+                        return 210;
+                    case "1.11":
+                    case "1.11.0":
+                        return 315;
+                    case "1.11.1":
+                    case "1.11.2":
+                        return 316;
+                    case "1.12":
+                    case "1.12.0":
+                        return 335;
+                    case "1.12.1":
+                        return 338;
+                    case "1.12.2":
+                        return 340;
+                    case "1.13":
+                        return 393;
+                    case "1.13.1":
+                        return 401;
                     default:
                         return 0;
                 }
@@ -291,6 +323,55 @@ namespace MinecraftBots.Protocol.Server
                 {
                     return 0;
                 }
+            }
+        }
+
+        public static string getGameVersion(int protover)
+        {
+            switch (protover)
+            {
+                case 51:
+                    return "1.4.6";
+                case 60:
+                    return "1.5.1";
+                case 61:
+                    return "1.5.2";
+                case 72:
+                    return "1.6";
+                case 73:
+                    return "1.6.2";
+                case 4:
+                    return "1.7.2";
+                case 5:
+                    return "1.7.10";
+                case 47:
+                    return "1.8";
+                case 107:
+                    return "1.9";
+                case 108:
+                    return "1.9.1";
+                case 109:
+                    return "1.9.2";
+                case 110:
+                    return "1.9.4";
+                case 210:
+                    return "1.10";
+                case 315:
+                    return "1.11";
+                case 316:
+                    return "1.11.2";
+                case 335:
+                    return "1.12";
+                case 338:
+                    return "1.12.1";
+                case 340:
+                    return "1.12.2";
+                case 393:
+                    return "1.13";
+                case 401:
+                    return "1.13.1";
+                default:
+                    return "";
             }
         }
     }

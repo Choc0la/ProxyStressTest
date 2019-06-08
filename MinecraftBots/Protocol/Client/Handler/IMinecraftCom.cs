@@ -9,7 +9,7 @@ namespace MinecraftBots.Protocol.Client.Handler
     public interface MinecraftEvent
     {
         void OnGameJoin();
-        void OnConnectionLost(int type,string msg);
-        void OnTextReceived(string msg);
+        void OnConnectionLost(BotUtils.DisconnectReason type,string msg);
+        void OnKeepAlive();
     }
 }
