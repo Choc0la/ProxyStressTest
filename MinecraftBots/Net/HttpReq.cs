@@ -32,14 +32,14 @@ namespace MinecraftBots.Net
                 {
                     list.Add(ip.Value);
                 }
-                Console.WriteLine("#2_Get Success:" + match.Count);
+                ConsoleIO.AddMsgSeq("#2_Get Success:" + match.Count, "Proxy");
             }
             catch (WebException e)
             {
                 wr = (HttpWebResponse)e.Response;
                 if (Convert.ToInt32(wr.StatusCode) == 521)
                 {
-                    Console.WriteLine("#2_SetCookie\r\n" + e.Message);
+                    ConsoleIO.AddMsgSeq("#2_SetCookie\r\n" + e.Message,"Proxy");
                     if (wr.Headers["Set-Cookie"] != null)
                         Setting.proxy_cookie = wr.Headers["Set-Cookie"];
                     Setting.IniWriteValue("Proxy", "cookie", Setting.proxy_cookie);
@@ -47,7 +47,7 @@ namespace MinecraftBots.Net
                 getips__(list);
             }catch(Exception e)
             {
-                Console.WriteLine("#2_Failed\r\n" + e.Message);
+                ConsoleIO.AddMsgSeq("#2_Failed\r\n" + e.Message,"Proxy");
             }
         }
 

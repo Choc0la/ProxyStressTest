@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using System.Net.Sockets;
 using MinecraftBots.Protocol.Server.Forge;
-using MinecraftBots.Net;
 
 namespace MinecraftBots.Protocol.Client.Handler
 {
@@ -13,34 +12,30 @@ namespace MinecraftBots.Protocol.Client.Handler
     {
         ForgeInfo forgeInfo;
         TcpClient client;
-        MinecraftEvent handler;
+        IMinecraftCom handler;
         private FMLHandshakeClientState fmlHandshakeState = FMLHandshakeClientState.START;
         private int compression_treshold = 0;
         private int protocolversion;
         private bool login_phase = true;
+        private bool keepUpdating = true;
         int currentDimension=-1;
 
-        private const int MC18Version = 47;
-        private const int MC19Version = 107;
-        private const int MC191Version = 108;
-        private const int MC110Version = 210;
-        private const int MC111Version = 315;
-        private const int MC17w13aVersion = 318;
-        private const int MC112pre5Version = 332;
-        private const int MC17w31aVersion = 336;
-        private const int MC17w45aVersion = 343;
-        private const int MC17w46aVersion = 345;
-        private const int MC17w47aVersion = 346;
-        private const int MC18w01aVersion = 352;
-        private const int MC18w06aVersion = 357;
-        private const int MC113pre4Version = 386;
-        private const int MC113pre7Version = 389;
-        private const int MC113Version = 393;
+        internal const int MC18Version = 47;
+        internal const int MC19Version = 107;
+        internal const int MC191Version = 108;
+        internal const int MC110Version = 210;
+        internal const int MC1112Version = 316;
+        internal const int MC112Version = 335;
+        internal const int MC1121Version = 338;
+        internal const int MC1122Version = 340;
+        internal const int MC113Version = 393;
+        internal const int MC114Version = 477;
+        internal const int MC1142Version = 485;
 
         private int autocomplete_transaction_id = 0;
 
         Thread netRead;
-        public MinecraftProtocol(TcpClient tcp, int protocolver,MinecraftEvent Handler,ForgeInfo forge)
+        public MinecraftProtocol(TcpClient tcp, int protocolver,IMinecraftCom Handler,ForgeInfo forge)
         {
             client = tcp;
             protocolversion = protocolver;
@@ -52,11 +47,7 @@ namespace MinecraftBots.Protocol.Client.Handler
             int read = 0;
             while (read < offset)
             {
-                int len = client.Client.Receive(buffer, start + read, offset - read, f);
-                if (len != 0)
-                    read += len;
-                else
-                    handler.OnConnectionLost(BotUtils.DisconnectReason.ConnectionLost, "Connection Close.");
+                read += client.Client.Receive(buffer, start + read, offset - read, f);
             }
         }
         private bool CompleteForgeHandshake()
@@ -133,35 +124,14 @@ namespace MinecraftBots.Protocol.Client.Handler
                         SendPacket(PacketOutgoingType.TeleportConfirm, getVarInt(teleportID));
                     }
                     break;
-                case PacketIncomingType.ChunkData:
-                    break;
-                case PacketIncomingType.MultiBlockChange:
-                    break;
-                case PacketIncomingType.BlockChange:
-                    break;
                 case PacketIncomingType.TabCompleteResult:
-                    if (protocolversion >= MC17w46aVersion)
+                    if (protocolversion >= MC113Version)
                     {
                         autocomplete_transaction_id = readNextVarInt(packetData);
-                    }
-                    if (protocolversion >= MC17w47aVersion)
-                    {
-                        // Start of the text to replace - currently unused
-                        readNextVarInt(packetData);
-                    }
-
-                    if (protocolversion >= MC18w06aVersion)
-                    {
-                        // Length of the text to replace - currently unused
-                        readNextVarInt(packetData);
+                        readNextVarInt(packetData); // Start of text to replace
+                        readNextVarInt(packetData); // Length of text to replace
                     }
                     int autocomplete_count = readNextVarInt(packetData);
-                    break;
-                case PacketIncomingType.MapChunkBulk:
-                    break;
-                case PacketIncomingType.UnloadChunk:
-                    break;
-                case PacketIncomingType.PlayerListUpdate:
                     break;
                 case PacketIncomingType.PluginMessage:
                     String channel = readNextString(packetData);
@@ -351,7 +321,7 @@ namespace MinecraftBots.Protocol.Client.Handler
         }
         private PacketIncomingType getPacketIncomingType(int packetID)
         {
-            if (protocolversion < MC19Version)
+            if (protocolversion <= MC18Version) // MC 1.7 and 1.8
             {
                 switch (packetID)
                 {
@@ -374,7 +344,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else if (protocolversion < MC17w13aVersion)
+            else if (protocolversion <= MC1112Version) // MC 1.9, 1.10 and 1.11
             {
                 switch (packetID)
                 {
@@ -397,30 +367,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else if (protocolversion < MC112pre5Version)
-            {
-                switch (packetID)
-                {
-                    case 0x20: return PacketIncomingType.KeepAlive;
-                    case 0x24: return PacketIncomingType.JoinGame;
-                    case 0x10: return PacketIncomingType.ChatMessage;
-                    case 0x35: return PacketIncomingType.Respawn;
-                    case 0x2F: return PacketIncomingType.PlayerPositionAndLook;
-                    case 0x21: return PacketIncomingType.ChunkData;
-                    case 0x11: return PacketIncomingType.MultiBlockChange;
-                    case 0x0C: return PacketIncomingType.BlockChange;
-                    //MapChunkBulk removed in 1.9
-                    case 0x1E: return PacketIncomingType.UnloadChunk;
-                    case 0x2E: return PacketIncomingType.PlayerListUpdate;
-                    case 0x0F: return PacketIncomingType.TabCompleteResult;
-                    case 0x19: return PacketIncomingType.PluginMessage;
-                    case 0x1B: return PacketIncomingType.KickPacket;
-                    //NetworkCompressionTreshold removed in 1.9
-                    case 0x34: return PacketIncomingType.ResourcePackSend;
-                    default: return PacketIncomingType.UnknownPacket;
-                }
-            }
-            else if (protocolversion < MC17w31aVersion)
+            else if (protocolversion <= MC112Version) // MC 1.12.0
             {
                 switch (packetID)
                 {
@@ -432,18 +379,16 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case 0x20: return PacketIncomingType.ChunkData;
                     case 0x10: return PacketIncomingType.MultiBlockChange;
                     case 0x0B: return PacketIncomingType.BlockChange;
-                    //MapChunkBulk removed in 1.9
                     case 0x1D: return PacketIncomingType.UnloadChunk;
                     case 0x2D: return PacketIncomingType.PlayerListUpdate;
                     case 0x0E: return PacketIncomingType.TabCompleteResult;
                     case 0x18: return PacketIncomingType.PluginMessage;
                     case 0x1A: return PacketIncomingType.KickPacket;
-                    //NetworkCompressionTreshold removed in 1.9
                     case 0x33: return PacketIncomingType.ResourcePackSend;
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else if (protocolversion < MC17w45aVersion)
+            else if (protocolversion <= MC1122Version) // MC 1.12.2
             {
                 switch (packetID)
                 {
@@ -455,87 +400,16 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case 0x20: return PacketIncomingType.ChunkData;
                     case 0x10: return PacketIncomingType.MultiBlockChange;
                     case 0x0B: return PacketIncomingType.BlockChange;
-                    //MapChunkBulk removed in 1.9
                     case 0x1D: return PacketIncomingType.UnloadChunk;
                     case 0x2E: return PacketIncomingType.PlayerListUpdate;
                     case 0x0E: return PacketIncomingType.TabCompleteResult;
                     case 0x18: return PacketIncomingType.PluginMessage;
                     case 0x1A: return PacketIncomingType.KickPacket;
-                    //NetworkCompressionTreshold removed in 1.9
                     case 0x34: return PacketIncomingType.ResourcePackSend;
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
-            else if (protocolversion < MC17w46aVersion)
-            {
-                switch (packetID)
-                {
-                    case 0x1F: return PacketIncomingType.KeepAlive;
-                    case 0x23: return PacketIncomingType.JoinGame;
-                    case 0x0E: return PacketIncomingType.ChatMessage;
-                    case 0x35: return PacketIncomingType.Respawn;
-                    case 0x2F: return PacketIncomingType.PlayerPositionAndLook;
-                    case 0x21: return PacketIncomingType.ChunkData;
-                    case 0x0F: return PacketIncomingType.MultiBlockChange;
-                    case 0x0B: return PacketIncomingType.BlockChange;
-                    //MapChunkBulk removed in 1.9
-                    case 0x1D: return PacketIncomingType.UnloadChunk;
-                    case 0x2E: return PacketIncomingType.PlayerListUpdate;
-                    //TabCompleteResult accidentely removed
-                    case 0x18: return PacketIncomingType.PluginMessage;
-                    case 0x1A: return PacketIncomingType.KickPacket;
-                    //NetworkCompressionTreshold removed in 1.9
-                    case 0x34: return PacketIncomingType.ResourcePackSend;
-                    default: return PacketIncomingType.UnknownPacket;
-                }
-            }
-            else if (protocolversion < MC18w01aVersion)
-            {
-                switch (packetID)
-                {
-                    case 0x20: return PacketIncomingType.KeepAlive;
-                    case 0x24: return PacketIncomingType.JoinGame;
-                    case 0x0E: return PacketIncomingType.ChatMessage;
-                    case 0x36: return PacketIncomingType.Respawn;
-                    case 0x30: return PacketIncomingType.PlayerPositionAndLook;
-                    case 0x21: return PacketIncomingType.ChunkData;
-                    case 0x0F: return PacketIncomingType.MultiBlockChange;
-                    case 0x0B: return PacketIncomingType.BlockChange;
-                    //MapChunkBulk removed in 1.9
-                    case 0x1E: return PacketIncomingType.UnloadChunk;
-                    case 0x2F: return PacketIncomingType.PlayerListUpdate;
-                    case 0x10: return PacketIncomingType.TabCompleteResult;
-                    case 0x19: return PacketIncomingType.PluginMessage;
-                    case 0x1B: return PacketIncomingType.KickPacket;
-                    //NetworkCompressionTreshold removed in 1.9
-                    case 0x35: return PacketIncomingType.ResourcePackSend;
-                    default: return PacketIncomingType.UnknownPacket;
-                }
-            }
-            else if (protocolversion < MC113pre7Version)
-            {
-                switch (packetID)
-                {
-                    case 0x20: return PacketIncomingType.KeepAlive;
-                    case 0x24: return PacketIncomingType.JoinGame;
-                    case 0x0E: return PacketIncomingType.ChatMessage;
-                    case 0x37: return PacketIncomingType.Respawn;
-                    case 0x31: return PacketIncomingType.PlayerPositionAndLook;
-                    case 0x21: return PacketIncomingType.ChunkData;
-                    case 0x0F: return PacketIncomingType.MultiBlockChange;
-                    case 0x0B: return PacketIncomingType.BlockChange;
-                    //MapChunkBulk removed in 1.9
-                    case 0x1E: return PacketIncomingType.UnloadChunk;
-                    case 0x2F: return PacketIncomingType.PlayerListUpdate;
-                    case 0x10: return PacketIncomingType.TabCompleteResult;
-                    case 0x19: return PacketIncomingType.PluginMessage;
-                    case 0x1B: return PacketIncomingType.KickPacket;
-                    //NetworkCompressionTreshold removed in 1.9
-                    case 0x36: return PacketIncomingType.ResourcePackSend;
-                    default: return PacketIncomingType.UnknownPacket;
-                }
-            }
-            else
+            else if (protocolversion < MC114Version) // MC 1.13 to 1.13.2
             {
                 switch (packetID)
                 {
@@ -547,22 +421,41 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case 0x22: return PacketIncomingType.ChunkData;
                     case 0x0F: return PacketIncomingType.MultiBlockChange;
                     case 0x0B: return PacketIncomingType.BlockChange;
-                    //MapChunkBulk removed in 1.9
                     case 0x1F: return PacketIncomingType.UnloadChunk;
                     case 0x30: return PacketIncomingType.PlayerListUpdate;
                     case 0x10: return PacketIncomingType.TabCompleteResult;
                     case 0x19: return PacketIncomingType.PluginMessage;
                     case 0x1B: return PacketIncomingType.KickPacket;
-                    //NetworkCompressionTreshold removed in 1.9
                     case 0x37: return PacketIncomingType.ResourcePackSend;
+                    default: return PacketIncomingType.UnknownPacket;
+                }
+            }
+            else // MC 1.14
+            {
+                switch (packetID)
+                {
+                    case 0x20: return PacketIncomingType.KeepAlive;
+                    case 0x25: return PacketIncomingType.JoinGame;
+                    case 0x0E: return PacketIncomingType.ChatMessage;
+                    case 0x3A: return PacketIncomingType.Respawn;
+                    case 0x35: return PacketIncomingType.PlayerPositionAndLook;
+                    case 0x21: return PacketIncomingType.ChunkData;
+                    case 0x0F: return PacketIncomingType.MultiBlockChange;
+                    case 0x0B: return PacketIncomingType.BlockChange;
+                    case 0x1D: return PacketIncomingType.UnloadChunk;
+                    case 0x33: return PacketIncomingType.PlayerListUpdate;
+                    case 0x10: return PacketIncomingType.TabCompleteResult;
+                    case 0x18: return PacketIncomingType.PluginMessage;
+                    case 0x1A: return PacketIncomingType.KickPacket;
+                    case 0x39: return PacketIncomingType.ResourcePackSend;
                     default: return PacketIncomingType.UnknownPacket;
                 }
             }
         }
 
-        private int getPacketOutgoingID(PacketOutgoingType packet, int protocol)
+        private int getPacketOutgoingID(PacketOutgoingType packet)
         {
-            if (protocol < MC19Version)
+            if (protocolversion <= MC18Version) // MC 1.7 and 1.8
             {
                 switch (packet)
                 {
@@ -575,10 +468,10 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TabComplete: return 0x14;
                     case PacketOutgoingType.PlayerPosition: return 0x04;
                     case PacketOutgoingType.PlayerPositionAndLook: return 0x06;
-                    case PacketOutgoingType.TeleportConfirm: throw new InvalidOperationException("Teleport confirm is not supported in protocol " + protocol);
+                    case PacketOutgoingType.TeleportConfirm: throw new InvalidOperationException("Teleport confirm is not supported in protocol " + protocolversion);
                 }
             }
-            else if (protocol < MC17w13aVersion)
+            else if (protocolversion <= MC1112Version) // MC 1.9, 1,10 and 1.11
             {
                 switch (packet)
                 {
@@ -594,28 +487,12 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
-            else if (protocolversion < MC112pre5Version)
+            else if (protocolversion <= MC112Version) // MC 1.12
             {
                 switch (packet)
                 {
                     case PacketOutgoingType.KeepAlive: return 0x0C;
-                    case PacketOutgoingType.ResourcePackStatus: return 0x17;
-                    case PacketOutgoingType.ChatMessage: return 0x03;
-                    case PacketOutgoingType.ClientStatus: return 0x04;
-                    case PacketOutgoingType.ClientSettings: return 0x05;
-                    case PacketOutgoingType.PluginMessage: return 0x0A;
-                    case PacketOutgoingType.TabComplete: return 0x02;
-                    case PacketOutgoingType.PlayerPosition: return 0x0D;
-                    case PacketOutgoingType.PlayerPositionAndLook: return 0x0E;
-                    case PacketOutgoingType.TeleportConfirm: return 0x00;
-                }
-            }
-            else if (protocol < MC17w31aVersion)
-            {
-                switch (packet)
-                {
-                    case PacketOutgoingType.KeepAlive: return 0x0C;
-                    case PacketOutgoingType.ResourcePackStatus: return 0x17;
+                    case PacketOutgoingType.ResourcePackStatus: return 0x18;
                     case PacketOutgoingType.ChatMessage: return 0x03;
                     case PacketOutgoingType.ClientStatus: return 0x04;
                     case PacketOutgoingType.ClientSettings: return 0x05;
@@ -626,7 +503,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
-            else if (protocol < MC17w45aVersion)
+            else if (protocolversion <= MC1122Version) // 1.12.2
             {
                 switch (packet)
                 {
@@ -642,55 +519,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
-            else if (protocol < MC17w46aVersion)
-            {
-                switch (packet)
-                {
-                    case PacketOutgoingType.KeepAlive: return 0x0A;
-                    case PacketOutgoingType.ResourcePackStatus: return 0x17;
-                    case PacketOutgoingType.ChatMessage: return 0x01;
-                    case PacketOutgoingType.ClientStatus: return 0x02;
-                    case PacketOutgoingType.ClientSettings: return 0x03;
-                    case PacketOutgoingType.PluginMessage: return 0x08;
-                    case PacketOutgoingType.TabComplete: throw new InvalidOperationException("TabComplete was accidentely removed in protocol " + protocol + ". Please use a more recent version.");
-                    case PacketOutgoingType.PlayerPosition: return 0x0C;
-                    case PacketOutgoingType.PlayerPositionAndLook: return 0x0D;
-                    case PacketOutgoingType.TeleportConfirm: return 0x00;
-                }
-            }
-            else if (protocol < MC113pre4Version)
-            {
-                switch (packet)
-                {
-                    case PacketOutgoingType.KeepAlive: return 0x0B;
-                    case PacketOutgoingType.ResourcePackStatus: return 0x18;
-                    case PacketOutgoingType.ChatMessage: return 0x01;
-                    case PacketOutgoingType.ClientStatus: return 0x02;
-                    case PacketOutgoingType.ClientSettings: return 0x03;
-                    case PacketOutgoingType.PluginMessage: return 0x09;
-                    case PacketOutgoingType.TabComplete: return 0x04;
-                    case PacketOutgoingType.PlayerPosition: return 0x0D;
-                    case PacketOutgoingType.PlayerPositionAndLook: return 0x0E;
-                    case PacketOutgoingType.TeleportConfirm: return 0x00;
-                }
-            }
-            else if (protocol < MC113pre7Version)
-            {
-                switch (packet)
-                {
-                    case PacketOutgoingType.KeepAlive: return 0x0C;
-                    case PacketOutgoingType.ResourcePackStatus: return 0x1B;
-                    case PacketOutgoingType.ChatMessage: return 0x01;
-                    case PacketOutgoingType.ClientStatus: return 0x02;
-                    case PacketOutgoingType.ClientSettings: return 0x03;
-                    case PacketOutgoingType.PluginMessage: return 0x09;
-                    case PacketOutgoingType.TabComplete: return 0x04;
-                    case PacketOutgoingType.PlayerPosition: return 0x0E;
-                    case PacketOutgoingType.PlayerPositionAndLook: return 0x0F;
-                    case PacketOutgoingType.TeleportConfirm: return 0x00;
-                }
-            }
-            else
+            else if (protocolversion < MC114Version) // MC 1.13 to 1.13.2
             {
                 switch (packet)
                 {
@@ -706,8 +535,24 @@ namespace MinecraftBots.Protocol.Client.Handler
                     case PacketOutgoingType.TeleportConfirm: return 0x00;
                 }
             }
+            else // MC 1.14
+            {
+                switch (packet)
+                {
+                    case PacketOutgoingType.KeepAlive: return 0x0F;
+                    case PacketOutgoingType.ResourcePackStatus: return 0x1F;
+                    case PacketOutgoingType.ChatMessage: return 0x03;
+                    case PacketOutgoingType.ClientStatus: return 0x04;
+                    case PacketOutgoingType.ClientSettings: return 0x05;
+                    case PacketOutgoingType.PluginMessage: return 0x0B;
+                    case PacketOutgoingType.TabComplete: return 0x06;
+                    case PacketOutgoingType.PlayerPosition: return 0x11;
+                    case PacketOutgoingType.PlayerPositionAndLook: return 0x12;
+                    case PacketOutgoingType.TeleportConfirm: return 0x00;
+                }
+            }
 
-            throw new System.ComponentModel.InvalidEnumArgumentException("Unknown PacketOutgoingType (protocol=" + protocol + ")", (int)packet, typeof(PacketOutgoingType));
+            throw new System.ComponentModel.InvalidEnumArgumentException("Unknown PacketOutgoingType (protocol=" + protocolversion + ")", (int)packet, typeof(PacketOutgoingType));
         }
         private void readNextPacket(ref int packetID, List<byte> packetData)
         {
@@ -741,22 +586,18 @@ namespace MinecraftBots.Protocol.Client.Handler
                 Receive(tmp, 0, 1, SocketFlags.None);
                 k = tmp[0];
                 i |= (k & 0x7F) << j++ * 7;
-                if (j > 5) ConsoleIO.AddMsgSeq("VarInt too big");
+                if (j > 5) throw new OverflowException("VarInt too big");
                 if ((k & 0x80) != 128) break;
             }
-            return i;
+            return i;//返回
         }
-        public byte[] readDataRAW(int offset)
+        public byte[] readDataRAW(int length)
         {
-            if (offset > 0)
+            if (length > 0)
             {
-                try
-                {
-                    byte[] cache = new byte[offset];
-                    Receive(cache, 0, offset, SocketFlags.None);
-                    return cache;
-                }
-                catch (OutOfMemoryException) { }
+                byte[] cache = new byte[length];
+                Receive(cache, 0, length, SocketFlags.None);
+                return cache;
             }
             return new byte[] { };
         }
@@ -878,7 +719,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                 {
                     Thread.Sleep(500);
                 }
-                while (Update());
+                while (keepUpdating && Update());
             }
             catch (System.IO.IOException) { }
             catch (SocketException) { }
@@ -887,11 +728,18 @@ namespace MinecraftBots.Protocol.Client.Handler
             handler.OnConnectionLost(BotUtils.DisconnectReason.ConnectionLost, "Connection Close.");
         }
 
-        private void StartUpdating()
+        public void StartUpdating(bool async)
         {
-            netRead = new Thread(new ThreadStart(Updater));
-            netRead.Name = "ProtocolPacketHandler";
-            netRead.Start();
+            if (async)
+            {
+                netRead = new Thread(new ThreadStart(Updater));
+                netRead.Name = "ProtocolPacketHandler";
+                netRead.Start();
+            }
+            else
+            {
+                Updater();
+            }
         }
 
 
@@ -936,7 +784,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                         }
                     }
 
-                    StartUpdating();
+                    //StartUpdating();
                     return true; //No need to check session or start encryption
                 }
                 else handlePacket(packetID, packetData);
@@ -944,7 +792,7 @@ namespace MinecraftBots.Protocol.Client.Handler
         }
         private void SendPacket(PacketOutgoingType packetID, IEnumerable<byte> packetData)
         {
-            SendPacket(getPacketOutgoingID(packetID, protocolversion), packetData);
+            SendPacket(getPacketOutgoingID(packetID), packetData);
         }
         private void SendPacket(int packetID, IEnumerable<byte> packetData)
         {
@@ -962,15 +810,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                     the_packet = concatBytes(uncompressed_length, the_packet);
                 }
             }
-            try
-            {
-                client.Client.Send(concatBytes(getVarInt(the_packet.Length), the_packet));
-            }
-            catch
-            {
-                handler.OnConnectionLost(BotUtils.DisconnectReason.ConnectionLost, "PacketSendError.");
-            }
-
+            client.Client.Send(concatBytes(getVarInt(the_packet.Length), the_packet));
         }
         private void SendForgeHandshakePacket(FMLHandshakeDiscriminator discriminator, byte[] data)
         {
@@ -982,9 +822,7 @@ namespace MinecraftBots.Protocol.Client.Handler
                 return true;
             try
             {
-                byte[] message_val = Encoding.UTF8.GetBytes(message);
-                byte[] message_len = getVarInt(message_val.Length);
-                byte[] message_packet = concatBytes(message_len, message_val);
+                byte[] message_packet = getString(message);
                 SendPacket(PacketOutgoingType.ChatMessage, message_packet);
                 return true;
             }
@@ -1057,7 +895,7 @@ namespace MinecraftBots.Protocol.Client.Handler
             byte[] tabcomplete_packet = new byte[] { };
             if (protocolversion >= MC18Version)
             {
-                if (protocolversion >= MC17w46aVersion)
+                if (protocolversion >= MC113Version)
                 {
                     tabcomplete_packet = concatBytes(tabcomplete_packet, transaction_id);
                     tabcomplete_packet = concatBytes(tabcomplete_packet, getString(BehindCursor));
@@ -1085,10 +923,12 @@ namespace MinecraftBots.Protocol.Client.Handler
         {
             try
             {
+                keepUpdating = false;
                 if (netRead != null)
+                {
                     netRead.Abort();
-                if(client!=null)
                     client.Close();
+                }       
             }
             catch { }
         }

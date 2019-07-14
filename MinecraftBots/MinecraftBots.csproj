@@ -49,11 +49,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Bot\tBotsTask_a.cs" />
-    <Compile Include="Bot\tBotsTask_b.cs" />
     <Compile Include="ConsoleIO.cs" />
     <Compile Include="Content.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="Net\HttpReq.cs" />
+    <Compile Include="Net\ProxyPool.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
@@ -151,6 +151,15 @@
     <Compile Include="Protocol\Server\Json.cs" />
     <Compile Include="Protocol\Server\ProtocolHandler.cs" />
     <Compile Include="Protocol\Server\ServerInfo.cs" />
+    <Compile Include="Proxy\Handlers\EventArgs\CreateConnectionAsyncCompletedEventArgs.cs" />
+    <Compile Include="Proxy\Handlers\Exceptions\ProxyException.cs" />
+    <Compile Include="Proxy\Handlers\HttpProxyClient.cs" />
+    <Compile Include="Proxy\Handlers\IProxyClient.cs" />
+    <Compile Include="Proxy\Handlers\ProxyClientFactory.cs" />
+    <Compile Include="Proxy\Handlers\Socks4aProxyClient.cs" />
+    <Compile Include="Proxy\Handlers\Socks4ProxyClient.cs" />
+    <Compile Include="Proxy\Handlers\Socks5ProxyClient.cs" />
+    <Compile Include="Proxy\Handlers\Utils.cs" />
     <Compile Include="Setting.cs" />
   </ItemGroup>
   <ItemGroup>

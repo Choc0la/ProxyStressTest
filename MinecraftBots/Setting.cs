@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Net;
+using Starksoft.Net.Proxy;
 
 namespace MinecraftBots
 {

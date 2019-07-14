@@ -11,9 +11,9 @@ namespace MinecraftBots
     {
         public static string ParseMsg(string json, List<string> links = null)
         {
-            return JSONData2String(Json.ParseJson(json), links);
+            return JSONData2String(Json.ParseJson(json),"", links);
         }
-        private static string JSONData2String(Json.JSONData data, List<string> links)
+        private static string JSONData2String(Json.JSONData data, string colorcode, List<string> links)
         {
             string extra_result = "";
             switch (data.Type)
@@ -34,11 +34,26 @@ namespace MinecraftBots
                     {
                         Json.JSONData[] extras = data.Properties["extra"].DataArray.ToArray();
                         foreach (Json.JSONData item in extras)
-                            extra_result = extra_result + JSONData2String(item, links);
+                            extra_result = extra_result + JSONData2String(item, colorcode, links) + "§r";
                     }
                     if (data.Properties.ContainsKey("text"))
                     {
-                        return JSONData2String(data.Properties["text"], links) + extra_result;
+                        return colorcode + JSONData2String(data.Properties["text"], colorcode, links) + extra_result;
+                    }
+                    else if (data.Properties.ContainsKey("translate"))
+                    {
+                        List<string> using_data = new List<string>();
+                        if (data.Properties.ContainsKey("using") && !data.Properties.ContainsKey("with"))
+                            data.Properties["with"] = data.Properties["using"];
+                        if (data.Properties.ContainsKey("with"))
+                        {
+                            Json.JSONData[] array = data.Properties["with"].DataArray.ToArray();
+                            for (int i = 0; i < array.Length; i++)
+                            {
+                                using_data.Add(JSONData2String(array[i], colorcode, links));
+                            }
+                        }
+                        return colorcode + JSONData2String(data.Properties["translate"], "", links) + extra_result;
                     }
                     else return extra_result;
 
@@ -46,12 +61,12 @@ namespace MinecraftBots
                     string result = "";
                     foreach (Json.JSONData item in data.DataArray)
                     {
-                        result += JSONData2String(item, links);
+                        result += JSONData2String(item, colorcode, links);
                     }
                     return result;
 
                 case Json.JSONData.DataType.String:
-                    return data.StringValue;
+                    return colorcode + data.StringValue;
             }
 
             return "";

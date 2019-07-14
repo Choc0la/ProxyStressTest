@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using MinecraftBots.Protocol.Server;
+using System.Net;
+using System.Collections.Generic;
 
 namespace MinecraftBots
 {
@@ -17,7 +19,6 @@ namespace MinecraftBots
             Console.WriteLine("欢迎使用ProxyStressTest-INSIDE项目ver.4.10. By:Lialy");
             Console.WriteLine("软件已开源;照成影响作者及开发成员不承担任何责任.");
             Console.WriteLine("项目地址(DEV)：https://github.com/MLinksme/ProxyStressTest");
-            Console.WriteLine("群号：443098623");
             Console.WriteLine("////////////////////////////////////////////////////");
             Console.WriteLine("正在初始化你的配置.");
             ConsoleIO.StartPrintMsg();
@@ -30,9 +31,8 @@ namespace MinecraftBots
                 SetServerIP();
                 Console.WriteLine("测试方案:");
                 Console.WriteLine("1:(代理)Proxy-Bots 并发测试.");
-                Console.WriteLine("2:(代理)Proxy-Bots 队列算法测试.(不支持Motd)");
                 int Method = int.Parse(Console.ReadLine());
-                ArrayList chat = new ArrayList();
+                List<string> chat = new List<string>();
                 ServerInfo info = new ServerInfo(ServerIP, ServerPort);
                 if (info.StartGetServerInfo())
                 {
@@ -53,19 +53,6 @@ namespace MinecraftBots
                                 s_a = new Bot.tBotsTask_a(info, Setting.name, Setting.threads, chat, Setting.protocol);
                             }
                             s_a.newTask(Setting.cooldown);
-                            break;
-                        case 2:
-                            chat.AddRange(File.ReadAllText(Setting.chatlist, Encoding.UTF8).Split('\n'));
-                            Bot.tBotsTask_b s_b;
-                            if (Setting.protocol == 0)
-                            {
-                                s_b = new Bot.tBotsTask_b(info, Setting.name, Setting.threads, chat, protocol);
-                            }
-                            else
-                            {
-                                s_b = new Bot.tBotsTask_b(info, Setting.name, Setting.threads, chat, Setting.protocol);
-                            }
-                            s_b.newTask(Setting.cooldown);
                             break;
                         default:
                             Console.WriteLine("未提供相应方案，请重新选择");
@@ -119,7 +106,7 @@ namespace MinecraftBots
             {
                 try
                 {
-                    ServerIP = host;
+                    ServerIP = getIP(host);
                     ServerPort = Convert.ToUInt16(sip[1]);
                     return true;
                 }
@@ -137,12 +124,12 @@ namespace MinecraftBots
                     //Domain name without port may need Minecraft SRV Record lookup
                     if(ProtocolHandler.MinecraftServiceLookup(ref host, ref port))
                     {
-                        ServerIP = host;
+                        ServerIP = getIP(host);
                         ServerPort = port;
                     }
                     else
                     {
-                        ServerIP = host;
+                        ServerIP = getIP(host);
                         Console.Write("服务器端口:");
                         ServerPort = int.Parse(Console.ReadLine());
                     }
@@ -151,7 +138,12 @@ namespace MinecraftBots
             }
             return false;
         }
-
+        private static string getIP(string domain)
+        {
+            IPHostEntry hostEntry = Dns.GetHostEntry(domain);
+            IPEndPoint ipEndPoint = new IPEndPoint(hostEntry.AddressList[0], 0);
+            return ipEndPoint.Address.ToString();
+        }
 
     }
 }

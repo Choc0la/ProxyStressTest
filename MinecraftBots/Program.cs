@@ -7,6 +7,7 @@ using System.IO;
 using System.Net;
 using System.Runtime.InteropServices;
 using MinecraftBots.Protocol.Server;
+using System.Collections.Generic;
 
 namespace MinecraftBots
 {
@@ -24,7 +25,7 @@ namespace MinecraftBots
                     if (param.StartsWith("host:"))
                         host = param.Replace("host:", "");
                 }
-                ArrayList chat = new ArrayList();
+                List<string> chat = new List<string>();
                 chat.AddRange(File.ReadAllText(Setting.chatlist, Encoding.UTF8).Split('\n'));
                 Content.SetServerIP(host);
                 ServerInfo info = new ServerInfo(Content.ServerIP, Content.ServerPort);
@@ -43,7 +44,7 @@ namespace MinecraftBots
             int port = 25565;
             string username = "%RANDOM%";
             int thread = 500;
-            ArrayList chat = new ArrayList();
+            List<string> chat = new List<string>();
             chat.Add("仅供测试！");
             ServerInfo info = new ServerInfo(host, port);
             if (info.StartGetServerInfo())
